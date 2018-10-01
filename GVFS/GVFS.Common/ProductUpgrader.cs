@@ -246,13 +246,14 @@ namespace GVFS.Common
         public virtual bool TryLoadRingConfig(out string error)
         {
             string gitPath = GVFSPlatform.Instance.GitInstallation.GetInstalledGitBinPath();
-            GitProcess.Result result = GitProcess.GetFromGlobalConfig(gitPath, GVFSConstants.GitConfig.UpgradeRing);
-            if (!result.HasErrors && !string.IsNullOrEmpty(result.Output))
+            LocalGVFSConfig localConfig = new LocalGVFSConfig();
+
+            string ringConfig = null;
+            if (localConfig.TryGetConfig(GVFSConstants.LocalGVFSConfig.UpgradeRing, out ringConfig, out error, this.tracer))
             {
-                string ringConfig = result.Output.TrimEnd('\r', '\n');
                 RingType ringType;
 
-                if (Enum.TryParse(ringConfig, ignoreCase: true, result: out ringType) && 
+                if (Enum.TryParse(ringConfig, ignoreCase: true, result: out ringType) &&
                     Enum.IsDefined(typeof(RingType), ringType) &&
                     ringType != RingType.Invalid)
                 {
@@ -262,14 +263,10 @@ namespace GVFS.Common
                 }
                 else
                 {
-                    error = "Invalid upgrade ring `" + ringConfig + "` specified in Git config.";                    
+                    error = "Invalid upgrade ring `" + ringConfig + "` specified in gvfs config.";
                 }
             }
-            else
-            {
-                error = string.IsNullOrEmpty(result.Errors) ? "Unable to determine upgrade ring." : result.Errors;                
-            }
-
+            
             error += Environment.NewLine + GVFSConstants.UpgradeVerbMessages.SetUpgradeRingCommand;
             this.Ring = RingType.Invalid;
             return false;

@@ -1,10 +1,5 @@
 ﻿using GVFS.FunctionalTests.Should;
 using GVFS.FunctionalTests.Tools;
-using GVFS.Tests.Should;
-using NUnit.Framework;
-using System;
-using System.IO;
-using System.Runtime.CompilerServices;
 
 namespace GVFS.FunctionalTests.Tests.GitCommands
 {
@@ -23,7 +18,7 @@ namespace GVFS.FunctionalTests.Tests.GitCommands
         private static readonly string RenameFilePathTo = Path.Combine("GVFS", "GVFS.Common", "Physical", "FileSystem", "FileProperties2.cs");
         private static readonly string RenameFolderPathFrom = Path.Combine("GVFS", "GVFS.Common", "PrefetchPacks");
         private static readonly string RenameFolderPathTo = Path.Combine("GVFS", "GVFS.Common", "PrefetchPacksRenamed");
-       
+
         public GitCommandsTests() : base(enlistmentPerTest: false)
         {
         }
@@ -43,6 +38,69 @@ namespace GVFS.FunctionalTests.Tests.GitCommands
         public void StatusTest()
         {
             this.ValidateGitCommand("status");
+        }
+
+        [TestCase]
+        public void StatusWithGitTraceToPathTest()
+        {
+            Dictionary<string, string> environmentVariables = new Dictionary<string, string>();
+            string expectedPath = Path.Combine(this.Enlistment.EnlistmentRoot, "trace-log-expected.txt");
+            string actualPath = Path.Combine(this.Enlistment.EnlistmentRoot, "trace-log-actual.txt");
+
+            string command = "status";
+            string controlRepoRoot = this.ControlGitRepo.RootPath;
+            string gvfsRepoRoot = this.Enlistment.RepoRoot;
+
+            environmentVariables["GIT_TRACE"] = expectedPath;
+            ProcessResult expectedResult = GitProcess.InvokeProcess(controlRepoRoot, command, environmentVariables);
+
+            environmentVariables["GIT_TRACE"] = actualPath;
+            ProcessResult actualResult = GitHelpers.InvokeGitAgainstGVFSRepo(gvfsRepoRoot, command, environmentVariables);
+
+            GitHelpers.ValidateGitOutput(command, expectedResult, actualResult);
+
+            this.FileSystem.FileExists(expectedPath).ShouldBeTrue();
+            this.FileSystem.FileExists(actualPath).ShouldBeTrue();
+
+            string lineToFind = "trace: built-in: git status";
+            this.FileSystem.ReadAllText(expectedPath).IndexOf(lineToFind).ShouldBeAtLeast(0);
+            this.FileSystem.ReadAllText(actualPath).IndexOf(lineToFind).ShouldBeAtLeast(0);
+        }
+
+        [TestCase]
+        public void StatusWithGitTraceToStderrTest()
+        {
+            Dictionary<string, string> environmentVariables = new Dictionary<string, string>();
+            environmentVariables["GIT_TRACE"] = "2";
+
+            string command = "status";
+            string controlRepoRoot = this.ControlGitRepo.RootPath;
+            string gvfsRepoRoot = this.Enlistment.RepoRoot;
+
+            ProcessResult expectedResult = GitProcess.InvokeProcess(controlRepoRoot, command, environmentVariables);
+            ProcessResult actualResult = GitHelpers.InvokeGitAgainstGVFSRepo(gvfsRepoRoot, command, environmentVariables);
+
+            GitHelpers.ValidateGitOutput(command, expectedResult, actualResult, validateStdErr: false);
+
+            string.IsNullOrWhiteSpace(expectedResult.Errors).ShouldBeFalse();
+            string.IsNullOrWhiteSpace(actualResult.Errors).ShouldBeTrue();
+        }
+
+        [TestCase]
+        public void StatusWithGitTraceInvalidCharactersTest()
+        {
+            Dictionary<string, string> environmentVariables = new Dictionary<string, string>();
+
+            if (Path.GetInvalidPathChars().Length == 0)
+            {
+                return;
+            }
+
+            string tracePath = Path.Combine(this.Enlistment.EnlistmentRoot, $"trace-log{Path.GetInvalidPathChars()[0]}.txt");
+            environmentVariables["GIT_TRACE"] = tracePath;
+
+            string command = "status";
+            GitHelpers.ValidateGitCommand(this.Enlistment, this.ControlGitRepo, environmentVariables, command);
         }
 
         [TestCase]
@@ -263,27 +321,27 @@ namespace GVFS.FunctionalTests.Tests.GitCommands
         {
             this.FolderShouldExistAndHaveFile("GitCommandsTests", "RenameFileTests", "1", "#test");
             this.MoveFile(
-                Path.Combine("GitCommandsTests", "RenameFileTests", "1", "#test"), 
+                Path.Combine("GitCommandsTests", "RenameFileTests", "1", "#test"),
                 Path.Combine("GitCommandsTests", "RenameFileTests", "1", "#testRenamed"));
 
             this.FolderShouldExistAndHaveFile("GitCommandsTests", "RenameFileTests", "2", "$test");
             this.MoveFile(
-                Path.Combine("GitCommandsTests", "RenameFileTests", "2", "$test"), 
+                Path.Combine("GitCommandsTests", "RenameFileTests", "2", "$test"),
                 Path.Combine("GitCommandsTests", "RenameFileTests", "2", "$testRenamed"));
 
             this.FolderShouldExistAndHaveFile("GitCommandsTests", "RenameFileTests", "3", ")");
             this.MoveFile(
-                Path.Combine("GitCommandsTests", "RenameFileTests", "3", ")"), 
+                Path.Combine("GitCommandsTests", "RenameFileTests", "3", ")"),
                 Path.Combine("GitCommandsTests", "RenameFileTests", "3", ")Renamed"));
 
             this.FolderShouldExistAndHaveFile("GitCommandsTests", "RenameFileTests", "4", "+.test");
             this.MoveFile(
-                Path.Combine("GitCommandsTests", "RenameFileTests", "4", "+.test"), 
+                Path.Combine("GitCommandsTests", "RenameFileTests", "4", "+.test"),
                 Path.Combine("GitCommandsTests", "RenameFileTests", "4", "+.testRenamed"));
 
             this.FolderShouldExistAndHaveFile("GitCommandsTests", "RenameFileTests", "5", "-.test");
             this.MoveFile(
-                Path.Combine("GitCommandsTests", "RenameFileTests", "5", "-.test"), 
+                Path.Combine("GitCommandsTests", "RenameFileTests", "5", "-.test"),
                 Path.Combine("GitCommandsTests", "RenameFileTests", "5", "-.testRenamed"));
 
             this.ValidateGitCommand("status");
